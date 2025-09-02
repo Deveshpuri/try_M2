@@ -16,17 +16,11 @@ export const register = TryCatch(async (req, res) => {
 
   const hashPassword = await bcrypt.hash(password, 10);
 
-  user = {
-    name,
-    email,
-    password: hashPassword,
-  };
-
   const otp = Math.floor(Math.random() * 1000000);
 
   const activationToken = jwt.sign(
     {
-      user,
+      user: { name, email, password: hashPassword },
       otp,
     },
     process.env.Activation_Secret,
@@ -40,10 +34,16 @@ export const register = TryCatch(async (req, res) => {
     otp,
   };
 
-  await sendMail(email, "ElearningX", data);
+  // Send verification email
+  try {
+    await sendMail(email, "ElearningX", data);
+  } catch (error) {
+    console.error('Email sending error:', error);
+    return res.status(500).json({ message: 'Failed to send OTP email' });
+  }
 
   res.status(200).json({
-    message: "Otp send to your mail",
+    message: "OTP sent to your mail",
     activationToken,
   });
 });
@@ -55,12 +55,12 @@ export const verifyUser = TryCatch(async (req, res) => {
 
   if (!verify)
     return res.status(400).json({
-      message: "Otp Expired",
+      message: "OTP Expired",
     });
 
-  if (verify.otp !== otp)
+  if (verify.otp !== parseInt(otp))
     return res.status(400).json({
-      message: "Wrong Otp",
+      message: "Wrong OTP",
     });
 
   await User.create({
@@ -84,11 +84,11 @@ export const loginUser = TryCatch(async (req, res) => {
       message: "No User with this email",
     });
 
-  const mathPassword = await bcrypt.compare(password, user.password);
+  const matchPassword = await bcrypt.compare(password, user.password);
 
-  if (!mathPassword)
+  if (!matchPassword)
     return res.status(400).json({
-      message: "wrong Password",
+      message: "Wrong Password",
     });
 
   const token = jwt.sign({ _id: user._id }, process.env.Jwt_Sec, {
